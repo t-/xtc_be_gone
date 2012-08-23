@@ -6,12 +6,14 @@ import subprocess as sp
 from ftplib import FTP
 from getpass import getpass,getuser
 
-ftpfilenames=[]
+ftpfilenames=["a",]
+
 
 def getFiles(ftpstr):
-    print ftpstr.split()
-    global ftpfilenames 
-    ftpfilenames = ftpstr.split()
+    global ftpfilenames
+    for i in ftpstr.split():
+        ftpfilenames.append(i) 
+    ftpfilenames.append("b")
     
     
 
@@ -67,7 +69,7 @@ def process_dirs(root, files):
         ftpcon.storbinary('STOR '+fileName,f)
         print ftpcon.dir()
         print ftpcon.retrlines("NLST",getFiles)
-        print len(ftpfilenames)
+        print ftpfilenames
         sys.exit(1)
 
 #-------------------------------------
