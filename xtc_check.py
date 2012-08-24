@@ -6,17 +6,6 @@ import subprocess as sp
 from ftplib import FTP
 from getpass import getpass,getuser
 
-ftpfilenames=["a",]
-
-
-def getFiles(ftpstr):
-    global ftpfilenames
-    for i in ftpstr.split():
-        ftpfilenames.append(i) 
-    ftpfilenames.append("b")
-    
-    
-
 def getFTPConnection():
     print "Enter archive ftp password for user %s"%getuser()
     ftppasswd = getpass()
@@ -68,8 +57,7 @@ def process_dirs(root, files):
         f=file(fileName,'rb')
         ftpcon.storbinary('STOR '+fileName,f)
         print ftpcon.dir()
-        print ftpcon.retrlines("NLST",getFiles)
-        print ftpfilenames
+        print ftpcon.nlst()
         sys.exit(1)
 
 #-------------------------------------
