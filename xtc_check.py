@@ -61,37 +61,49 @@ class store_xtc_files():
             try:
                 self.ftpcon.mkd(dirname)
             except Exception:
-                ems = 'it did not work, who cares'
+                pass
             self.ftpcon.cwd(dirname)
-            print '\tftp:\tchanging to', self.ftpcon.pwd()
+            print '\tftp:\tchanged to directory', self.ftpcon.pwd()
     
+    def convert_xtc_file(self, xtc_filename):
+        print '## Processing', xtc_filename
+        small_xtc_filename = xtc_filename.replace('traj', self.GLOBAL_xtcgroup)
+        p = sp.Popen("source /home/tgraen/owl/enderlein/env.sh; trjconv -s topol.tpr -f %s -o %s -pbc mol" % (xtc_filename, small_xtc_filename), shell=True, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE)
+        sto, ste = p.communicate(self.GLOBAL_xtcgroup)
+        print sto
+        print ste
+        return small_xtc_filename
+
+    def ftp_upload_xtc(self, root, fileName):
+        self.change_dir_ftp(root)
+        f = file(fileName, 'rb')
+        print '\tftp: Storing file %s in %s\n' % (fileName, root)
+        self.ftpcon.storbinary('STOR ' + fileName, f)
+        print 'Existing backups in folder %s:' % (root), self.ftpcon.nlst()
+        #self.ftpcon.cwd(self.ftp_cur_dir)
+        #print '\tftp changing back to',self.ftpcon.pwd()
+
+    def process_xtc_file(self, root, xtc_filename):
+        small_xtc_filename = self.convert_xtc_file(xtc_filename)
+        self.getFTPConnection()
+        self.ftp_upload_xtc(root, small_xtc_filename)
+
+
     def process_dirs(self,root, files):
         if not root.endswith('04-md'):
             return 
+
         xtclist = self.gen_xtc_list(files)
         if len(xtclist) == 0:
             return
-        print '\n#Good: Found finished .xtc trajectories:', root, xtclist
+        print '\n#Good: Found finished .xtc_filename trajectories:', root, xtclist
         
         self.gen_non_water_pdb(root)
         
-        for xtc in xtclist:
-            print '## Processing',xtc
-            small_xtc = xtc.replace('traj', self.GLOBAL_xtcgroup)
-            p = sp.Popen("source /home/tgraen/owl/enderlein/env.sh; trjconv -s topol.tpr -f %s -o %s -pbc mol" % (xtc, small_xtc), shell=True, stdin=sp.PIPE, stdout = sp.PIPE, stderr = sp.PIPE)
-            sto,ste=p.communicate(self.GLOBAL_xtcgroup)
-            print sto
-            print ste
-            self.getFTPConnection()
-            self.change_dir_ftp(root)
-            fileName=small_xtc#'topol.tpr'
-            f=file(fileName,'rb')
-            print '\tftp: Storing file %s in %s\n'%(fileName,root)
-            self.ftpcon.storbinary('STOR '+fileName,f)
-            print 'Existing backups in folder %s:'%(root),self.ftpcon.nlst()
+        for xtc_filename in xtclist:
+            self.process_xtc_file(root, xtc_filename)
             
-            #self.ftpcon.cwd(self.ftp_cur_dir)
-            #print '\tftp changing back to',self.ftpcon.pwd()
+
 
 #-------------------------------------
 def main():
@@ -104,5 +116,6 @@ def main():
         store.process_dirs(root, files)
         os.chdir(cur_dir)
     print 'Normal Termination\n'
+    
 if __name__ == '__main__':
     main()
