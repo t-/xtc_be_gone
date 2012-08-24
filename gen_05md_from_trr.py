@@ -40,7 +40,7 @@ class gen_new_runs():
     def process_dirs(self,root, files):
         if not root.endswith('04-md'):
             return 
-
+        print '######',root,files
         trrlist = self.gen_trr_list(files)
         
         myPopen("source /netmount/bluearc/tgraen/env.sh; rm -rf ../05-md; mkdir ../05-md; cd ../05-md/; cp ../04-md/topol.top ../04-md/input.pdb .")
