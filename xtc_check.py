@@ -6,6 +6,15 @@ import subprocess as sp
 from ftplib import FTP
 from getpass import getpass,getuser
 
+def myPopen(cmd,inputstr=None):
+    p = sp.Popen(cmd,shell=True, stdin=sp.PIPE)
+    if inputstr==None:
+        p.communicate()
+    else:
+        p.communicate(inputstr)
+    if p.returncode != 0:
+        raise Exception("Command %s failed with non zero return code %d."%(cmd,p.returncode))
+
 class store_xtc_files():
     def __init__(self):
         self.GLOBAL_xtcgroup = 'non-Water'
@@ -13,7 +22,7 @@ class store_xtc_files():
         self.ftppasswd = getpass()
         self.ftpcon = False
         self.getFTPConnection()
-        self.ftp_cur_dir = self.ftpcon.pwd()
+        self.ftp_cur_dir = self.ftpcon.pwd()+"/test"
         
     def getFTPConnection(self):
         if self.ftpcon:
@@ -27,6 +36,7 @@ class store_xtc_files():
         self.ftpcon = FTP()
         self.ftpcon.connect('archiv105',1021)
         self.ftpcon.login(getuser(),self.ftppasswd)
+        self.ftpcon.cwd(self.ftp_cur_dir)
     
     def gen_non_water_pdb(self,root):
         if os.path.exists('%s.pdb'%(self.GLOBAL_xtcgroup)):
@@ -34,22 +44,18 @@ class store_xtc_files():
         if not os.path.exists('topol.tpr'):
             raise Exception('topol.tpr file in %s not found' % (root))
         print '\nGenerating %s pdb structure' %(self.GLOBAL_xtcgroup)
-        p = sp.Popen("source /home/tgraen/owl/enderlein/env.sh; editconf -f topol.tpr -o tmp.pdb", shell=True, stdin=sp.PIPE, stdout = sp.PIPE, stderr = sp.PIPE)
-        sto,ste=p.communicate()
-        p = sp.Popen("source /home/tgraen/owl/enderlein/env.sh; trjconv -f tmp.pdb -s topol.tpr -o %s.pdb -pbc mol" % (self.GLOBAL_xtcgroup), shell=True, stdin=sp.PIPE, stdout = sp.PIPE, stderr = sp.PIPE)
-        sto,ste=p.communicate(self.GLOBAL_xtcgroup)
+        myPopen("editconf -f topol.tpr -o tmp.pdb")
+        myPopen("trjconv -f tmp.pdb -s topol.tpr -o %s.pdb -pbc mol" % (self.GLOBAL_xtcgroup),self.GLOBAL_xtcgroup)
         os.remove('tmp.pdb')
         #store file on archive
-        self.getFTPConnection()
-        self.change_dir_ftp(root)
-        print '\tftp: Storing file %s.pdb in %s\n'%(self.GLOBAL_xtcgroup,root)
-        f=file('%s.pdb'%(self.GLOBAL_xtcgroup),'rb')
-        self.ftpcon.storbinary('STOR %s.pdb'%(self.GLOBAL_xtcgroup),f)
+
+        print '\tftp: Storing file %s.pdb in %s\n'%(self.GLOBAL_xtcgroup,root)        
+        self.ftp_upload_file(root, '%s.pdb'%(self.GLOBAL_xtcgroup))
     
     def gen_xtc_list(self,files):
         xtclist = []
         for datei in files:
-            if datei.endswith('.xtc'):
+            if datei.endswith('.xtc') and datei.startswith("traj"):
                 xtclist.append(datei)
         xtclist.sort()
         xtclist = xtclist[:-1]
@@ -68,26 +74,19 @@ class store_xtc_files():
     def convert_xtc_file(self, xtc_filename):
         print '## Processing', xtc_filename
         small_xtc_filename = xtc_filename.replace('traj', self.GLOBAL_xtcgroup)
-        p = sp.Popen("source /home/tgraen/owl/enderlein/env.sh; trjconv -s topol.tpr -f %s -o %s -pbc mol" % (xtc_filename, small_xtc_filename), shell=True, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE)
-        sto, ste = p.communicate(self.GLOBAL_xtcgroup)
-        print sto
-        print ste
-        return small_xtc_filename
-
-    def ftp_upload_xtc(self, root, fileName):
+        myPopen("trjconv -s topol.tpr -f %s -o %s -pbc mol" % (xtc_filename, small_xtc_filename), self.GLOBAL_xtcgroup)
+        
+    def ftp_upload_file(self, root, fileName):
+        self.getFTPConnection()
         self.change_dir_ftp(root)
         f = file(fileName, 'rb')
         print '\tftp: Storing file %s in %s\n' % (fileName, root)
         self.ftpcon.storbinary('STOR ' + fileName, f)
         print 'Existing backups in folder %s:' % (root), self.ftpcon.nlst()
-        #self.ftpcon.cwd(self.ftp_cur_dir)
-        #print '\tftp changing back to',self.ftpcon.pwd()
 
     def process_xtc_file(self, root, xtc_filename):
-        small_xtc_filename = self.convert_xtc_file(xtc_filename)
-        self.getFTPConnection()
-        self.ftp_upload_xtc(root, small_xtc_filename)
-
+        self.convert_xtc_file(xtc_filename)
+        self.ftp_upload_file(root, xtc_filename)
 
     def process_dirs(self,root, files):
         if not root.endswith('04-md'):
@@ -97,13 +96,15 @@ class store_xtc_files():
         if len(xtclist) == 0:
             return
         print '\n#Good: Found finished .xtc_filename trajectories:', root, xtclist
+        print '\n#Found finished .xtc trajectories in', root
+        for xtc in xtclist:
+            print "#\t",xtc
         
         self.gen_non_water_pdb(root)
         
         for xtc_filename in xtclist:
             self.process_xtc_file(root, xtc_filename)
             
-
 
 #-------------------------------------
 def main():
